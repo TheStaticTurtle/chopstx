@@ -11,14 +11,13 @@
 
 static chopstx_mutex_t usb_mtx;
 static chopstx_cond_t usb_cnd;
-static uint32_t bDeviceState = USB_DEVICE_STATE_UNCONNECTED;
+static uint32_t bDeviceState = UNCONNECTED; /* USB device status */
 
 extern void EP6_IN_Callback (uint16_t len);
 extern void EP6_OUT_Callback (uint16_t len);
 
 #define MSC_MASS_STORAGE_RESET_COMMAND 0xFF
 extern int fraucheky_enabled (void);
-extern void fraucheky_init (void);
 extern void fraucheky_main (void);
 
 extern void fraucheky_setup_endpoints_for_interface (struct usb_dev *dev, int stop);
@@ -42,9 +41,13 @@ usb_device_reset (struct usb_dev *dev)
   /* Initialize Endpoint 0.  */
   usb_lld_setup_endp (dev, ENDP0, 1, 1);
 
+  /* Stop the interface */
+  for (i = 0; i < NUM_INTERFACES; i++)
+    setup_endpoints_for_interface (dev, i, 1);
+
   /* Notify upper layer.  */
   chopstx_mutex_lock (&usb_mtx);
-  bDeviceState = USB_DEVICE_STATE_ATTACHED;
+  bDeviceState = ATTACHED;
   chopstx_cond_signal (&usb_cnd);
   chopstx_mutex_unlock (&usb_mtx);
 }
@@ -92,7 +95,7 @@ usb_set_configuration (struct usb_dev *dev)
       for (i = 0; i < NUM_INTERFACES; i++)
 	setup_endpoints_for_interface (dev, i, 0);
       chopstx_mutex_lock (&usb_mtx);
-      bDeviceState = USB_DEVICE_STATE_CONFIGURED;
+      bDeviceState = CONFIGURED;
       chopstx_mutex_unlock (&usb_mtx);
     }
   else if (current_conf != dev->dev_req.value)
@@ -104,7 +107,7 @@ usb_set_configuration (struct usb_dev *dev)
       for (i = 0; i < NUM_INTERFACES; i++)
 	setup_endpoints_for_interface (dev, i, 1);
       chopstx_mutex_lock (&usb_mtx);
-      bDeviceState = USB_DEVICE_STATE_ADDRESSED;
+      bDeviceState = ADDRESSED;
       chopstx_cond_signal (&usb_cnd);
       chopstx_mutex_unlock (&usb_mtx);
     }
@@ -161,6 +164,7 @@ static void usb_tx_done (uint8_t ep_num, uint16_t len);
 static void usb_rx_ready (uint8_t ep_num, uint16_t len);
 
 
+#define INTR_REQ_USB SIGUSR1
 #define PRIO_USB 3
 
 static void *
@@ -185,7 +189,6 @@ usb_main (void *arg)
 
 	event_handle:
 	  e = usb_lld_event_handler (&dev);
-	  chopstx_intr_done (&interrupt);
 	  ep_num = USB_EVENT_ENDP (e);
 
 	  if (ep_num != 0)
@@ -204,7 +207,7 @@ usb_main (void *arg)
 
 	      case USB_EVENT_DEVICE_ADDRESSED:
 		chopstx_mutex_lock (&usb_mtx);
-		bDeviceState = USB_DEVICE_STATE_ADDRESSED;
+		bDeviceState = ADDRESSED;
 		chopstx_cond_signal (&usb_cnd);
 		chopstx_mutex_unlock (&usb_mtx);
 		continue;
@@ -302,17 +305,16 @@ main (int argc, char **argv)
   chopstx_mutex_init (&usb_mtx);
   chopstx_cond_init (&usb_cnd);
 
-  bDeviceState = USB_DEVICE_STATE_UNCONNECTED;
+  bDeviceState = UNCONNECTED;
   usb_thd = chopstx_create (PRIO_USB, STACK_ADDR_USB, STACK_SIZE_USB,
 			    usb_main, NULL);
-  fraucheky_init ();
-  while (bDeviceState != USB_DEVICE_STATE_CONFIGURED)
+  while (bDeviceState != CONFIGURED)
     chopstx_usec_wait (250*1000);
   fraucheky_main ();
   chopstx_cancel (usb_thd);
   chopstx_join (usb_thd, NULL);
   usb_lld_shutdown ();
-  bDeviceState = USB_DEVICE_STATE_UNCONNECTED;
+  bDeviceState = UNCONNECTED;
 
   return 0;
 }

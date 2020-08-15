@@ -1,8 +1,7 @@
 /*
- * sys-stm32f103.c - system routines for the initial page for STM32F103.
+ * sys.c - system routines for the initial page for STM32F103.
  *
- * Copyright (C) 2013, 2014, 2015, 2016, 2017, 2018
- *               Flying Stone Technology
+ * Copyright (C) 2013, 2014, 2015, 2016  Flying Stone Technology
  * Author: NIIBE Yutaka <gniibe@fsij.org>
  *
  * Copying and distribution of this file, with or without modification,
@@ -63,19 +62,6 @@ static void wait (int count)
     asm volatile ("" : : "r" (i) : "memory");
 }
 
-void wait_button() {
-    #if defined(GPIO_BUTTON_PIN)
-        while (1){
-            set_led(1);
-            wait(1000000);
-            if( (GPIO_OTHER->IDR & (1 << GPIO_BUTTON_PIN)) ) break;
-
-            set_led(0);
-            wait(1000000);
-            if( (GPIO_OTHER->IDR & (1 << GPIO_BUTTON_PIN)) ) break;
-        }
-    #endif
-}
 
 static void
 usb_lld_sys_shutdown (void)
@@ -94,7 +80,7 @@ usb_lld_sys_init (void)
     {
       usb_lld_sys_shutdown ();
       /* Disconnect requires SE0 (>= 2.5uS).  */
-      wait (5*MHZ);
+      wait (300);
     }
 
   usb_cable_config (1);
@@ -268,9 +254,6 @@ flash_protect (void)
       FLASH->OPTKEYR = FLASH_KEY1;
       FLASH->OPTKEYR = FLASH_KEY2;
 
-      while (!(FLASH->CR & FLASH_CR_OPTWRE))
-	;
-
       FLASH->CR |= FLASH_CR_OPTER;
       FLASH->CR |= FLASH_CR_STRT;
 
@@ -316,10 +299,38 @@ flash_erase_all_and_exec (void (*entry)(void))
   for (;;);
 }
 
+struct SCB
+{
+  volatile uint32_t CPUID;
+  volatile uint32_t ICSR;
+  volatile uint32_t VTOR;
+  volatile uint32_t AIRCR;
+  volatile uint32_t SCR;
+  volatile uint32_t CCR;
+  volatile uint8_t  SHP[12];
+  volatile uint32_t SHCSR;
+  volatile uint32_t CFSR;
+  volatile uint32_t HFSR;
+  volatile uint32_t DFSR;
+  volatile uint32_t MMFAR;
+  volatile uint32_t BFAR;
+  volatile uint32_t AFSR;
+  volatile uint32_t PFR[2];
+  volatile uint32_t DFR;
+  volatile uint32_t ADR;
+  volatile uint32_t MMFR[4];
+  volatile uint32_t ISAR[5];
+};
+
+#define SCS_BASE	(0xE000E000)
+#define SCB_BASE	(SCS_BASE +  0x0D00)
+static struct SCB *const SCB = (struct SCB *)SCB_BASE;
+
+#define SYSRESETREQ 0x04
 static void
 nvic_system_reset (void)
 {
-  SCB->AIRCR = (0x05FA0000 | (SCB->AIRCR & 0x70) | SCB_AIRCR_SYSRESETREQ);
+  SCB->AIRCR = (0x05FA0000 | (SCB->AIRCR & 0x70) | SYSRESETREQ);
   asm volatile ("dsb");
   for (;;);
 }
@@ -334,13 +345,13 @@ reset (void)
    * So, we take the address from PC.
    */
   asm volatile ("cpsid	i\n\t"		/* Mask all interrupts. */
-		"ldr	r0, 1f\n\t"     /* r0 = SCB start */
+		"ldr	r0, 1f\n\t"     /* r0 = SCR */
 		"mov	r1, pc\n\t"	/* r1 = (PC + 0x1000) & ~0x0fff */
 		"mov	r2, #0x1000\n\t"
 		"add	r1, r1, r2\n\t"
 		"sub	r2, r2, #1\n\t"
 		"bic	r1, r1, r2\n\t"
-		"str	r1, [r0, #8]\n\t"	/* Set SCB->VTOR */
+		"str	r1, [r0, #8]\n\t"	/* Set SCR->VCR */
 		"ldr	r0, [r1], #4\n\t"
 		"msr	MSP, r0\n\t"	/* Main (exception handler) stack. */
 		"ldr	r0, [r1]\n\t"	/* Reset handler.                  */

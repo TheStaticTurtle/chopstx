@@ -2,7 +2,6 @@
 #define BOARD_ID    0x696886af
 /* echo -n "FST-01" | sha256sum | sed -e 's/^.*\(........\)  -$/\1/' */
 
-#define MCU_STM32F1 1
 #define STM32F10X_MD		/* Medium-density device */
 
 #define STM32_PLLXTPRE                  STM32_PLLXTPRE_DIV1
@@ -71,7 +70,6 @@
  * Those will be removed soon, once such an driver will be improved
  * in new style.
  */
-#if defined(PINPAD_CIR_SUPPORT)
 /* For pin-cir settings of Gnuk */
 #define TIMx                  TIM2
 #define INTR_REQ_TIM          TIM2_IRQ
@@ -84,4 +82,3 @@
 #define ENABLE_RCC_APB1
 #define RCC_APBnENR_TIMxEN    RCC_APB1ENR_TIM2EN
 #define RCC_APBnRSTR_TIMxRST  RCC_APB1RSTR_TIM2RST
-#endif

@@ -1,7 +1,7 @@
 /*
  * eventflag.c - Eventflag
  *
- * Copyright (C) 2013, 2016, 2018  Flying Stone Technology
+ * Copyright (C) 2013, 2016  Flying Stone Technology
  * Author: NIIBE Yutaka <gniibe@fsij.org>
  *
  * This file is a part of Chopstx, a thread library for embedded.
@@ -36,20 +36,8 @@ void
 eventflag_init (struct eventflag *ev)
 {
   ev->flags = 0;
-  ev->mask = ~0;
   chopstx_cond_init (&ev->cond);
   chopstx_mutex_init (&ev->mutex);
-}
-
-
-void
-eventflag_set_mask (struct eventflag *ev, eventmask_t m)
-{
-  chopstx_mutex_lock (&ev->mutex);
-  ev->mask = m;
-  if ((ev->flags & ev->mask))
-    chopstx_cond_signal (&ev->cond);
-  chopstx_mutex_unlock (&ev->mutex);
 }
 
 
@@ -58,7 +46,7 @@ eventflag_check (void *arg)
 {
   struct eventflag *ev = arg;
 
-  return (ev->flags & ev->mask) != 0;
+  return ev->flags != 0;
 }
 
 
@@ -74,9 +62,6 @@ eventflag_prepare_poll (struct eventflag *ev, chopstx_poll_cond_t *poll_desc)
 }
 
 
-/* When multiple events are marked, event with lower bit has precedence.
-   Because __builtin_ffs returns the least significant 1-bit.  */
-
 eventmask_t
 eventflag_get (struct eventflag *ev)
 {
@@ -84,7 +69,7 @@ eventflag_get (struct eventflag *ev)
   eventmask_t m;
 
   chopstx_mutex_lock (&ev->mutex);
-  n = __builtin_ffs ((ev->flags & ev->mask));
+  n = __builtin_ffs (ev->flags);
   if (n)
     {
       m = (1 << (n - 1));
@@ -105,10 +90,10 @@ eventflag_wait (struct eventflag *ev)
   eventmask_t m;
 
   chopstx_mutex_lock (&ev->mutex);
-  while (!(ev->flags & ev->mask))
+  if (!ev->flags)
     chopstx_cond_wait (&ev->cond, &ev->mutex);
 
-  n = __builtin_ffs ((ev->flags & ev->mask));
+  n = __builtin_ffs (ev->flags);
   if (n) /* Always n > 0 when waked up, but make sure no bad things.  */
     {
       m = (1 << (n - 1));
@@ -139,7 +124,6 @@ eventflag_signal (struct eventflag *ev, eventmask_t m)
 {
   chopstx_mutex_lock (&ev->mutex);
   ev->flags |= m;
-  if ((ev->flags & ev->mask))
-    chopstx_cond_signal (&ev->cond);
+  chopstx_cond_signal (&ev->cond);
   chopstx_mutex_unlock (&ev->mutex);
 }

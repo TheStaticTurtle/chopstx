@@ -1,7 +1,7 @@
 /*
  * usb-stm32f103.c - USB driver for STM32F103
  *
- * Copyright (C) 2016, 2017, 2018  Flying Stone Technology
+ * Copyright (C) 2016  Flying Stone Technology
  * Author: NIIBE Yutaka <gniibe@fsij.org>
  *
  * This file is a part of Chopstx, a thread library for embedded.
@@ -339,25 +339,7 @@ void usb_lld_init (struct usb_dev *dev, uint8_t feature)
 
   /* Clear Interrupt Status Register, and enable interrupt for USB */
   st103_set_istr (0);
-
-  st103_set_btable ();
-
-  st103_set_cntr (CNTR_CTRM | CNTR_OVRM | CNTR_ERRM
-		  | CNTR_WKUPM | CNTR_SUSPM | CNTR_RESETM);
-
-#if 0
-/*
- * Since stop mode makes PLL, HSI & HES oscillators stop, USB clock is
- * not supplied in stop mode.  Thus, USB wakeup can't occur.
- *
- * So, only sleep mode can be supported with USB, which doesn't
- * require use of EXTI.
- */
-#include "mcu/stm32f103.h"
-  /* Setting of EXTI wakeup event to break stop mode.       */
-  EXTI->EMR  |= (1 << 18);	/* Event mask cleared       */
-  EXTI->RTSR |= (1 << 18);	/* Rising trigger selection */
-#endif
+  st103_set_cntr (CNTR_CTRM | CNTR_RESETM);
 }
 
 void usb_lld_prepare_shutdown (void)
@@ -384,19 +366,6 @@ usb_lld_event_handler (struct usb_dev *dev)
     {
       st103_set_istr (CLR_RESET);
       return USB_MAKE_EV (USB_EVENT_DEVICE_RESET);
-    }
-  else if ((istr_value & ISTR_WKUP))
-    {
-      *CNTR &= ~CNTR_FSUSP;
-      st103_set_istr (CLR_WKUP);
-      return USB_MAKE_EV (USB_EVENT_DEVICE_WAKEUP);
-    }
-  else if ((istr_value & ISTR_SUSP))
-    {
-      *CNTR |= CNTR_FSUSP;
-      st103_set_istr (CLR_SUSP);
-      *CNTR |= CNTR_LPMODE;
-      return USB_MAKE_EV (USB_EVENT_DEVICE_SUSPEND);
     }
   else
     {
@@ -909,6 +878,7 @@ void usb_lld_reset (struct usb_dev *dev, uint8_t feature)
 {
   usb_lld_set_configuration (dev, 0);
   dev->feature = feature;
+  st103_set_btable ();
   st103_set_daddr (0);
 }
 
@@ -1105,10 +1075,10 @@ usb_lld_ctrl_send (struct usb_dev *dev, const void *buf, size_t buflen)
   data_p->len = buflen;
 
   /* Restrict the data length to be the one host asks for */
-  if (data_p->len >= len_asked)
+  if (data_p->len > len_asked)
     data_p->len = len_asked;
-  /* ZLP is only required when host doesn't expect the end of packets.  */
-  else if (data_p->len != 0 && (data_p->len % USB_MAX_PACKET_SIZE) == 0)
+
+  if (data_p->len != 0 && (data_p->len % USB_MAX_PACKET_SIZE) == 0)
     data_p->require_zlp = 1;
 
   if (data_p->len < USB_MAX_PACKET_SIZE)

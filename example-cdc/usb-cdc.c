@@ -248,7 +248,7 @@ usb_device_reset (struct usb_dev *dev)
   tty0.flag_connected = 0;
   tty0.flag_send_ready = 1;
   tty0.flag_input_avail = 0;
-  tty0.device_state = USB_DEVICE_STATE_ATTACHED;
+  tty0.device_state = ATTACHED;
   memcpy (&tty0.line_coding, &line_coding0, sizeof (struct line_coding));
   chopstx_mutex_unlock (&tty0.mtx);
 }
@@ -417,7 +417,7 @@ usb_set_configuration (struct usb_dev *dev)
       for (i = 0; i < NUM_INTERFACES; i++)
 	vcom_setup_endpoints_for_interface (i, 0);
       chopstx_mutex_lock (&tty0.mtx);
-      tty0.device_state = USB_DEVICE_STATE_CONFIGURED;
+      tty0.device_state = CONFIGURED;
       chopstx_cond_signal (&tty0.cnd);
       chopstx_mutex_unlock (&tty0.mtx);
     }
@@ -430,7 +430,7 @@ usb_set_configuration (struct usb_dev *dev)
       for (i = 0; i < NUM_INTERFACES; i++)
 	vcom_setup_endpoints_for_interface (i, 1);
       chopstx_mutex_lock (&tty0.mtx);
-      tty0.device_state = USB_DEVICE_STATE_ADDRESSED;
+      tty0.device_state = ADDRESSED;
       chopstx_cond_signal (&tty0.cnd);
       chopstx_mutex_unlock (&tty0.mtx);
     }
@@ -639,6 +639,7 @@ usb_rx_ready (uint8_t ep_num, uint16_t len)
 
 static void *tty_main (void *arg);
 
+#define INTR_REQ_USB 20
 #define PRIO_TTY      4
 
 #define STACK_PROCESS_3
@@ -656,7 +657,7 @@ tty_open (void)
   tty0.flag_connected = 0;
   tty0.flag_send_ready = 1;
   tty0.flag_input_avail = 0;
-  tty0.device_state = USB_DEVICE_STATE_UNCONNECTED;
+  tty0.device_state = UNCONNECTED;
   memcpy (&tty0.line_coding, &line_coding0, sizeof (struct line_coding));
 
   chopstx_create (PRIO_TTY, STACK_ADDR_TTY, STACK_SIZE_TTY, tty_main, &tty0);
@@ -719,7 +720,6 @@ tty_main (void *arg)
 	   *        
 	   */
 	  e = usb_lld_event_handler (&dev);
-	  chopstx_intr_done (&usb_intr);
 	  ep_num = USB_EVENT_ENDP (e);
 
 	  if (ep_num != 0)
@@ -744,7 +744,7 @@ tty_main (void *arg)
 		 * OK.
 		 */
 		chopstx_mutex_lock (&tty0.mtx);
-		tty0.device_state = USB_DEVICE_STATE_ADDRESSED;
+		tty0.device_state = ADDRESSED;
 		chopstx_cond_signal (&tty0.cnd);
 		chopstx_mutex_unlock (&tty0.mtx);
 		continue;
@@ -800,7 +800,7 @@ tty_main (void *arg)
 	}
 
       chopstx_mutex_lock (&t->mtx);
-      if (t->device_state == USB_DEVICE_STATE_CONFIGURED && t->flag_connected
+      if (t->device_state == CONFIGURED && t->flag_connected
 	  && t->flag_send_ready)
 	{
 	  uint8_t line[32];
@@ -824,7 +824,7 @@ void
 tty_wait_configured (struct tty *t)
 {
   chopstx_mutex_lock (&t->mtx);
-  while (t->device_state != USB_DEVICE_STATE_CONFIGURED)
+  while (t->device_state != CONFIGURED)
     chopstx_cond_wait (&t->cnd, &t->mtx);
   chopstx_mutex_unlock (&t->mtx);
 }

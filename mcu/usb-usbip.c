@@ -1,7 +1,7 @@
 /*
  * usb-usbip.c - USB Device Emulation (server side) by USBIP
  *
- * Copyright (C) 2017, 2018  g10 Code GmbH
+ * Copyright (C) 2017 g10 Code GmbH
  * Author: NIIBE Yutaka <gniibe@fsij.org>
  *
  * This file is a part of Chopstx, a thread library for embedded.
@@ -50,8 +50,6 @@
 #include <usb_lld_driver.h>
 
 #include <alloca.h>
-
-#include "sys.h" /* for debug */
 
 static pthread_t tid_main;
 static pthread_t tid_usbip;
@@ -187,7 +185,6 @@ enum {
   USB_INTR_DATA_TRANSFER,
   USB_INTR_RESET,
   USB_INTR_SUSPEND,
-  USB_INTR_SHUTDOWN
 };
 
 struct usb_controller {
@@ -307,22 +304,17 @@ hc_handle_control_urb (struct urb *urb)
   uint16_t remain = urb->len;
   uint64_t l;
 
-  if ((debug & DEBUG_USB))
-    puts ("hcu 0");
+  puts ("hcu 0");
 
   usbc_ep0.urb = urb;
   r = control_setup_transaction (urb);
   if (r < 0)
     goto error;
 
-  if ((debug & DEBUG_USB))
-    puts ("hcu 1");
-
+  puts ("hcu 1");
   if (urb->dir == USBIP_DIR_OUT)
     {				/* Output from host to device.  */
-      if ((debug & DEBUG_USB))
-	printf ("hcu: %d\n", r);
-
+      printf ("hcu: %d\n", r);
       while (r == 0)
 	{
 	  if (remain > 64)
@@ -348,9 +340,7 @@ hc_handle_control_urb (struct urb *urb)
     }
   else
     {				/* Input from device to host.  */
-      if ((debug & DEBUG_USB))
-	puts ("hcu 2");
-
+      puts ("hcu 2");
       while (1)
 	{
 	  if (remain > 64)
@@ -363,38 +353,28 @@ hc_handle_control_urb (struct urb *urb)
 	  if (r < 0)
 	    break;
 
-	  if ((debug & DEBUG_USB))
-	    puts ("hcu 3");
-
+	  puts ("hcu 3");
 	  remain -= r;
 	  urb->data_p += r;
 	  if (r < 64)
 	    break;
 	}
-
-      if ((debug & DEBUG_USB))
-	puts ("hcu 4");
-
+      puts ("hcu 4");
       if (r >= 0)
 	{
-	  if ((debug & DEBUG_USB))
-	    puts ("hcu 5");
-
+	  puts ("hcu 5");
 	  read (usbc_ep0.eventfd, &l, sizeof (l));
 	  r = control_read_status_transaction ();
 	  if (r >= 0)
 	    r = remain;
 	}
-      if ((debug & DEBUG_USB))
-	puts ("hcu 6");
+      puts ("hcu 6");
     }
 
   if (r < 0)
     {
     error:
-      if ((debug & DEBUG_USB))
-	printf ("hcu 7 %d\n", r);
-
+      fprintf (stderr, "hcu 7 %d\n", r);
       /* recovery.  */
       usbc_ep0.state = USB_STATE_READY;
     }
@@ -413,9 +393,7 @@ hc_handle_control_urb (struct urb *urb)
   else
     urb->len = 0;
 
-  if ((debug & DEBUG_USB))
-    printf ("hu-next: %d (%d)\n", urb->len, urb->seq);
-
+  printf ("hu-next: %d (%d)\n", urb->len, urb->seq);
   usbc_ep0.urb = NULL;
   return r;
 }
@@ -458,7 +436,6 @@ usbip_handle_data_urb (struct urb *urb)
 }
 
 static int fd;
-static int shutdown_notify_fd;
 static pthread_mutex_t fd_mutex;
 
 static void unlink_urb (struct urb *urb);
@@ -475,8 +452,7 @@ usbip_finish_urb (struct urb *urb, int r)
   memset (&msg_rep, 0, sizeof (msg_rep));
   msg_rep.len = htonl (urb->len);
 
-  if ((debug & DEBUG_USB))
-    printf ("ufu: %d (%d)\n", r, urb->seq);
+  fprintf (stderr, "ufu: %d (%d)\n", r, urb->seq);
 
   if (r < 0)
     msg_rep.status = htonl (r);
@@ -513,9 +489,7 @@ hc_handle_data_urb (struct usb_control *usbc_p)
   uint16_t count;
   struct urb *urb = usbc_p->urb;
 
-  if ((debug & DEBUG_USB))
-    puts ("hc_hdu 0");
-
+  puts ("hc_hdu 0");
   if (urb->remain > 64)
     count = 64;
   else
@@ -523,9 +497,7 @@ hc_handle_data_urb (struct usb_control *usbc_p)
 
   if (urb->dir == USBIP_DIR_OUT)
     {				/* Output from host to device.  */
-      if ((debug & DEBUG_USB))
-	puts ("hc_hdu 1");
-
+      puts ("hc_hdu 1");
       r = write_data_transaction (usbc_p, urb->ep, urb->data_p, count);
       if (r < 0)
 	return r;
@@ -537,17 +509,14 @@ hc_handle_data_urb (struct usb_control *usbc_p)
 	{
 	  size_t len = urb->len - urb->remain;
 
-	  if ((debug & DEBUG_USB))
-	    printf ("->data: %lu\n", len);
-
+	  fprintf (stderr, "->data: %lu\n", len);
 	  // successfully finished
 	  if (len)
 	    {
 	      char *s = alloca (len + 1);
 	      memcpy (s, urb->data, len);
 	      s[len] = 0;
-	      if ((debug & DEBUG_USB))
-		printf ("   : %s\n", s);
+	      fprintf (stderr, "   : %s\n", s);
 	    }
 	  return 0;
 	}
@@ -556,9 +525,7 @@ hc_handle_data_urb (struct usb_control *usbc_p)
     }
   else
     {				/* Input from device to host.  */
-      if ((debug & DEBUG_USB))
-	puts ("hc_hdu 2");
-
+      puts ("hc_hdu 2");
       r = read_data_transaction (usbc_p, urb->ep, urb->data_p, count);
       if (r < 0)
 	return r;
@@ -569,17 +536,14 @@ hc_handle_data_urb (struct usb_control *usbc_p)
 	{
 	  size_t len = urb->len - urb->remain;
 
-	  if ((debug & DEBUG_USB))
-	    printf ("<-data: %lu %d\n", len, r);
-
+	  fprintf (stderr, "<-data: %lu %d\n", len, r);
 	  // successfully finished
 	  if (len)
 	    {
 	      char *s = alloca (len + 1);
 	      memcpy (s, urb->data, len);
 	      s[len] = 0;
-	      if ((debug & DEBUG_USB))
-		printf ("   : %s\n", s);
+	      fprintf (stderr, "   : %s\n", s);
 	    }
 	  urb->len = len;
 	  return 0;
@@ -688,9 +652,8 @@ usbip_handle_urb (uint32_t seq)
   urb->remain = urb->len = ntohl (msg_cmd.len);
   urb->data_p = urb->data;
 
-  if ((debug & DEBUG_USB))
-    printf ("URB: dir=%s, ep=%d, len=%d\n", urb->dir==USBIP_DIR_IN? "IN": "OUT",
-	    urb->ep, urb->len);
+  printf ("URB: dir=%s, ep=%d, len=%d\n", urb->dir==USBIP_DIR_IN? "IN": "OUT",
+	  urb->ep, urb->len);
 
   if (recv (fd, (char *)urb->setup, sizeof (urb->setup), 0) != sizeof (urb->setup))
     {
@@ -700,10 +663,9 @@ usbip_handle_urb (uint32_t seq)
     }
 
   if (urb->ep == 0)
-    if ((debug & DEBUG_USB))
-      printf ("URB: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-	      urb->setup[0], urb->setup[1], urb->setup[2], urb->setup[3],
-	      urb->setup[4], urb->setup[5], urb->setup[6], urb->setup[7]);
+    printf ("URB: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+	    urb->setup[0], urb->setup[1], urb->setup[2], urb->setup[3],
+	    urb->setup[4], urb->setup[5], urb->setup[6], urb->setup[7]);
 
   if (urb->dir == USBIP_DIR_OUT && urb->len)
     {
@@ -803,8 +765,7 @@ usbip_process_cmd (void)
 
   if (recv (fd, (char *)&msg, sizeof (msg), 0) != sizeof (msg))
     {
-      if (errno)
-	perror ("msg recv");
+      perror ("msg recv");
       return -1;
     }
 
@@ -816,9 +777,7 @@ usbip_process_cmd (void)
       const char *device_list;
       size_t device_list_size;
 
-      if ((debug & DEBUG_USB))
-	printf ("Device List\n");
-
+      printf ("Device List\n");
       if (attached)
 	{
 	  fprintf (stderr, "REQ list while attached\n");
@@ -849,9 +808,7 @@ usbip_process_cmd (void)
       size_t attach_size;
       char busid[32];
 
-      if ((debug & DEBUG_USB))
-	printf ("Attach device\n");
-
+      printf ("Attach device\n");
       if (attached)
 	{
 	  fprintf (stderr, "REQ attach while attached\n");
@@ -871,8 +828,7 @@ usbip_process_cmd (void)
       if (attach
 	  && (size_t)send (fd, attach, attach_size, 0) == attach_size)
 	{
-	  if ((debug & DEBUG_USB))
-	    printf ("Attach device!\n");
+	  printf ("Attach device!\n");
 	  attached = 1;
 	  pthread_mutex_unlock (&fd_mutex);
 	}
@@ -891,8 +847,7 @@ usbip_process_cmd (void)
 	  return -1;
 	}
 
-      if ((debug & DEBUG_USB))
-	printf ("URB SUBMIT! %d\n", msg.seq);
+      printf ("URB SUBMIT! %d\n", msg.seq);
       usbip_handle_urb (msg.seq);
     }
   else if (msg.cmd == CMD_URB_UNLINK)
@@ -953,8 +908,7 @@ usbip_process_cmd (void)
       if (found)
 	msg_rep.status = htonl(-ECONNRESET);
 
-      if ((debug & DEBUG_USB))
-	printf ("URB UNLINK! %d: %s\n", seq, found?"o":"x");
+      printf ("URB UNLINK! %d: %s\n", seq, found?"o":"x");
 
       pthread_mutex_lock (&fd_mutex);
       if ((size_t)send (fd, &msg, sizeof (msg), 0) != sizeof (msg))
@@ -986,9 +940,7 @@ usbip_ep_ready (struct usb_control *usbc_p)
 
   if (!usbc_p->urb)
     {
-      if ((debug & DEBUG_USB))
-	puts ("???usbip_ep_ready");
-
+      puts ("???usbip_ep_ready");
       return;
     }
 
@@ -1042,9 +994,6 @@ usbip_run_server (void *arg)
   const int one = 1;
   struct pollfd pollfds[16];
   int i;
-  int r = 0;
-
-  (void)arg;
 
   pthread_mutex_init (&usbc.mutex, NULL);
   pthread_cond_init (&usbc.cond, NULL);
@@ -1052,6 +1001,7 @@ usbip_run_server (void *arg)
   pthread_mutex_init (&fd_mutex, NULL);
   pthread_mutex_init (&urb_mutex, NULL);
 
+  (void)arg;
   if ((sock = socket (PF_INET, SOCK_STREAM, 0)) < 0)
     {
       perror ("socket");
@@ -1080,7 +1030,9 @@ usbip_run_server (void *arg)
       exit (1);
     }
 
-  pollfds[1].fd = shutdown_notify_fd;
+  /* FIXME: We don't use this pollstruct as EP0 is handled
+     synchronously.  */
+  pollfds[1].fd = usbc_ep0.eventfd;
   pollfds[1].events = POLLIN;
   pollfds[1].revents = 0;
 
@@ -1100,15 +1052,14 @@ usbip_run_server (void *arg)
       exit (1);
     }
 
-  /* Since EP0 is handled synchronously, we don't poll on
-   * usbc_ep0.eventfd.  We poll on socket and shutdown request.
-   */
   pollfds[0].fd = fd;
   pollfds[0].events = POLLIN;
   pollfds[0].revents = 0;
 
   for (;;)
     {
+      int r;
+
       for (i = 1; i < 8; i++)
 	{
 	  if (usbc_ep_in[i].urb)
@@ -1128,7 +1079,7 @@ usbip_run_server (void *arg)
       if (poll (pollfds, 16, -1) < 0)
 	{
 	  if (errno == EINTR)
-	    continue;
+	    goto again;
 
 	  perror ("poll");
 	  exit (1);
@@ -1137,8 +1088,7 @@ usbip_run_server (void *arg)
       if ((pollfds[0].revents & POLLNVAL)
 	  || (pollfds[0].revents & POLLERR))
 	{
-	  fprintf (stderr, "Error on USBIP client socket: %d\n",
-		   pollfds[0].revents);
+	  fprintf (stderr, "Error on USBIP client socket: %d\n", pollfds[0].revents);
 	  exit (1);
 	}
       if ((pollfds[0].revents & POLLIN))
@@ -1148,20 +1098,6 @@ usbip_run_server (void *arg)
 	    break;
 	  if (r)
 	    goto again;
-	}
-
-      if ((pollfds[1].revents & POLLNVAL)
-	  || (pollfds[1].revents & POLLERR))
-	{
-	  fprintf (stderr, "Error on USBIP client socket: %d\n",
-		   pollfds[1].revents);
-	  exit (1);
-	}
-      if ((pollfds[1].revents & POLLIN))
-	{
-	  /* Shutdown request */
-	  r = 0;
-	  break;
 	}
 
       for (i = 1; i < 8; i++)
@@ -1174,9 +1110,7 @@ usbip_run_server (void *arg)
 	    }
 	  if ((pollfds[i*2].revents & POLLIN))
 	    {
-	      if ((debug & DEBUG_USB))
-		puts ("poll in read");
-
+	      puts ("poll in read");
 	      usbip_ep_ready (&usbc_ep_in[i]);
 	    }
 
@@ -1188,49 +1122,15 @@ usbip_run_server (void *arg)
 	    }
 	  if ((pollfds[i*2+1].revents & POLLIN))
 	    {
-	      if ((debug & DEBUG_USB))
-		puts ("poll out read");
-
+	      puts ("poll out read");
 	      usbip_ep_ready (&usbc_ep_out[i]);
 	    }
 	}
     }
 
-  {
-    struct urb *urb;
-
-    pthread_mutex_lock (&urb_mutex);
-    if ((urb = urb_list))
-      {
-	do
-	  {
-	    unlink_urb (urb);
-	    unlink_urb_ep (urb);
-	    free (urb);
-	  }
-	while ((urb = urb_list));
-      }
-    pthread_mutex_unlock (&urb_mutex);
-  }
-
   close (fd);
   close (sock);
-
-  close (shutdown_notify_fd);
-  close (usbc_ep0.eventfd);
-
-  for (i = 1; i < 8; i++)
-    {
-      close (usbc_ep_in[i].eventfd);
-      close (usbc_ep_out[i].eventfd);
-    }
-
-  attached = 0;
-
-  if (r < 0)
-    /* It was detach request from client.  */
-    exit (0);
-
+  exit (0);
   return NULL;
 }
 
@@ -1263,8 +1163,7 @@ control_setup_transaction (struct urb *urb)
     r = -EAGAIN;
   else
     {
-      if ((debug & DEBUG_USB))
-	printf ("cst error %d\n", usbc_ep0.state);
+      fprintf (stderr, "cst error %d\n", usbc_ep0.state);
       r = -EPIPE;
     }
   pthread_mutex_unlock (&usbc_ep0.mutex);
@@ -1288,8 +1187,7 @@ control_write_data_transaction (char *buf, uint16_t count)
     {
       if (usbc_ep0.len < count)
 	{
-	  if ((debug & DEBUG_USB))
-	    printf ("*** usbc_ep0.len < count");
+	  fprintf (stderr, "*** usbc_ep0.len < count");
 	  r = -EPIPE;
 	  usbc_ep0.state = USB_STATE_STALL;
 	}
@@ -1326,12 +1224,9 @@ control_write_status_transaction (void)
   pthread_mutex_lock (&usbc_ep0.mutex);
   if (usbc_ep0.state == USB_STATE_READY)
     {
-      if ((debug & DEBUG_USB))
-	puts ("control_write_status_transaction");
-
+      puts ("control_write_status_transaction");
       if (usbc_ep0.len != 0)
-	if ((debug & DEBUG_USB))
-	  printf ("*** ACK length %d\n", usbc_ep0.len);
+	fprintf (stderr, "*** ACK length %d\n", usbc_ep0.len);
       usbc_ep0.state = USB_STATE_NAK;
       notify_device (USB_INTR_DATA_TRANSFER, 0, USBIP_DIR_IN);
       r = 0;
@@ -1360,10 +1255,7 @@ control_read_data_transaction (char *buf, uint16_t count)
   if (usbc_ep0.state == USB_STATE_READY)
     {
       if (usbc_ep0.len > count)
-	{
-	  if ((debug & DEBUG_USB))
-	    printf ("***c read: length %d > %d\n", usbc_ep0.len, count);
-	}
+	fprintf (stderr, "***c read: length %d > %d\n", usbc_ep0.len, count);
       else
 	count = usbc_ep0.len;
 
@@ -1445,10 +1337,7 @@ read_data_transaction (struct usb_control *usbc_p,
 		       int ep_num, char *buf, uint16_t count)
 {
   if (usbc_p->len > count)
-    {
-      if ((debug & DEBUG_USB))
-	printf ("*** length %d > %d\n", usbc_p->len, count);
-    }
+    fprintf (stderr, "*** length %d > %d\n", usbc_p->len, count);
   else
     count = usbc_p->len;
 
@@ -1458,8 +1347,9 @@ read_data_transaction (struct usb_control *usbc_p,
   return count;
 }
 
-extern void chx_handle_intr (uint32_t irq_num);
+void chx_handle_intr (uint32_t irq_num);
 
+#define INTR_REQ_USB SIGUSR1
 
 static void
 usb_intr (int signum, siginfo_t *siginfo, void *arg)
@@ -1493,13 +1383,6 @@ usb_lld_init (struct usb_dev *dev, uint8_t feature)
   tid_main = pthread_self ();
 
   pthread_sigmask (SIG_BLOCK, &sigset, NULL);
-
-  shutdown_notify_fd = eventfd (0, EFD_CLOEXEC);
-  if (shutdown_notify_fd < 0)
-    {
-      perror ("eventfd");
-      exit (1);
-    }
 
   pthread_mutex_init (&usbc_ep0.mutex, NULL);
   usbc_ep0.urb = NULL;
@@ -1562,14 +1445,12 @@ usb_lld_prepare_shutdown (void)
 void
 usb_lld_shutdown (void)
 {
-  const uint64_t l = 1;
-
   /* 
-   * Tell USBIP server thread about shutdown.
+   * Stop USBIP server thread.
    */
-  write (shutdown_notify_fd, &l, sizeof (l));
+  pthread_cancel (tid_usbip);
   pthread_join (tid_usbip, NULL);
-  notify_device (USB_INTR_SHUTDOWN, 0, 0);
+  /* FIXME: Cancel all URB in the list here.  */
 }
 
 static void
@@ -1608,11 +1489,6 @@ usb_lld_event_handler (struct usb_dev *dev)
     return USB_MAKE_EV (handle_setup0 (dev));
   else if (intr == USB_INTR_DATA_TRANSFER)
     return usb_handle_transfer (dev, dir, ep_num);
-  else if (intr == USB_INTR_SHUTDOWN)
-    {
-      if ((debug & DEBUG_USB))
-	puts ("USB shutdown");
-    }
 
   return USB_EVENT_OK;
 }
@@ -2026,9 +1902,7 @@ static int handle_in0 (struct usb_dev *dev)
 	   == (STANDARD_REQUEST | DEVICE_RECIPIENT)))
 	{
 	  /* XXX: record the assigned address of this device??? */
-	  if ((debug & DEBUG_USB))
-	    printf ("Set Address: %d\n", dev->dev_req.value);
-
+	  printf ("Set Address: %d\n", dev->dev_req.value);
 	  r = USB_EVENT_DEVICE_ADDRESSED;
 	}
       else
@@ -2043,9 +1917,7 @@ static int handle_in0 (struct usb_dev *dev)
     }
   else
     {
-      if ((debug & DEBUG_USB))
-	puts ("handle_in0 error");
-
+      puts ("handle_in0 error");
       dev->state = STALLED;
       pthread_mutex_lock (&usbc_ep0.mutex);
       usbc_ep0.state = USB_STATE_STALL;
@@ -2083,9 +1955,7 @@ static void handle_out0 (struct usb_dev *dev)
        * Or else, unexpected state.
        * STALL the endpoint, until we receive the next SETUP token.
        */
-      if ((debug & DEBUG_USB))
-	puts ("handle_out0 error");
-
+      puts ("handle_out0 error");
       dev->state = STALLED;
       pthread_mutex_lock (&usbc_ep0.mutex);
       usbc_ep0.state = USB_STATE_STALL;
@@ -2169,10 +2039,10 @@ usb_lld_ctrl_send (struct usb_dev *dev, const void *buf, size_t buflen)
   data_p->len = buflen;
 
   /* Restrict the data length to be the one host asks for */
-  if (data_p->len >= len_asked)
+  if (data_p->len > len_asked)
     data_p->len = len_asked;
-  /* ZLP is only required when host doesn't expect the end of packets.  */
-  else if (data_p->len != 0 && (data_p->len % USB_MAX_PACKET_SIZE) == 0)
+
+  if (data_p->len != 0 && (data_p->len % USB_MAX_PACKET_SIZE) == 0)
     data_p->require_zlp = 1;
 
   if (data_p->len < USB_MAX_PACKET_SIZE)
@@ -2207,9 +2077,7 @@ usb_lld_current_configuration (struct usb_dev *dev)
 void
 usb_lld_ctrl_error (struct usb_dev *dev)
 {
-  if ((debug & DEBUG_USB))
-    puts ("ctrl_error");
-
+  puts ("ctrl_error");
   dev->state = STALLED;
   pthread_mutex_lock (&usbc_ep0.mutex);
   usbc_ep0.state = USB_STATE_STALL;
@@ -2266,9 +2134,7 @@ usb_lld_stall_tx (int ep_num)
   usbc_p->state = USB_STATE_STALL;
   notify_hostcontroller (usbc_p);
   pthread_mutex_unlock (&usbc_p->mutex);
-
-  if ((debug & DEBUG_USB))
-    printf ("stall tx %d\n", ep_num);
+  printf ("stall tx %d\n", ep_num);
 }
 
 void
@@ -2280,8 +2146,7 @@ usb_lld_stall_rx (int ep_num)
   usbc_p->state = USB_STATE_STALL;
   notify_hostcontroller (usbc_p);
   pthread_mutex_unlock (&usbc_p->mutex);
-  if ((debug & DEBUG_USB))
-    printf ("stall rx %d\n", ep_num);
+  printf ("stall rx %d\n", ep_num);
 }
 
 void
@@ -2296,8 +2161,7 @@ usb_lld_rx_enable_buf (int ep_num, void *buf, size_t len)
 
   notify_hostcontroller (usbc_p);
   pthread_mutex_unlock (&usbc_p->mutex);
-  if ((debug & DEBUG_USB))
-    printf ("usb_lld_rx_enable_buf: %d\n", ep_num);
+  printf ("usb_lld_rx_enable_buf: %d\n", ep_num);
 }
 
 
@@ -2312,6 +2176,5 @@ usb_lld_tx_enable_buf (int ep_num, const void *buf, size_t len)
   usbc_p->len = len;
   notify_hostcontroller (usbc_p);
   pthread_mutex_unlock (&usbc_p->mutex);
-  if ((debug & DEBUG_USB))
-    printf ("usb_lld_tx_enable_buf: %d %ld\n", ep_num, len);
+  printf ("usb_lld_tx_enable_buf: %d %ld\n", ep_num, len);
 }

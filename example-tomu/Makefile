@@ -1,4 +1,4 @@
-# Makefile for example application of Chopstx
+# Example application for Tomu board
 
 PROJECT = sample
 
@@ -6,11 +6,10 @@ CHOPSTX = ..
 LDSCRIPT= sample.ld
 CSRC = sample.c usb-cdc.c
 
-CHIP=stm32f103
-
+CHIP=efm32hg
 USE_SYS = yes
+USE_ADC = yes
 USE_USB = yes
-USE_USART = yes
 
 ###################################
 CROSS = arm-none-eabi-
@@ -18,10 +17,12 @@ CC   = $(CROSS)gcc
 LD   = $(CROSS)gcc
 OBJCOPY   = $(CROSS)objcopy
 
-MCU   = cortex-m3
+### MCU   = cortex-m3
+MCU   = cortex-m0plus
 CWARN = -Wall -Wextra -Wstrict-prototypes
-DEFS  = -DUSE_SYS3 -DFREE_STANDING -DMHZ=72
+DEFS  = -DMAKE_ENTRY_PUBLIC -DUSE_SYS3 -DFREE_STANDING -DMHZ=14
 OPT   = -O3 -Os -g
+# OPT   = -O1 -g
 LIBS  =
 
 ####################

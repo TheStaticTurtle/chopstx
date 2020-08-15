@@ -1,164 +1,6 @@
 NEWS - Noteworthy changes
 
 
-* Major changes in Chopstx 1.14
-
-  Released 2019-03-02
-
-** Enhancement of driver: USART for STM32
-Now, it supports smartcard communication.
-
-
-* Major changes in Chopstx 1.13
-
-  Released 2018-12-19
-
-** API fix (redefinition): chopstx_poll
-In old implementations, when chopstx_poll returns by non-timeout
-event, *USEC_P is not updated.  Now, it is updated.
-
-
-* Major changes in Chopstx 1.12
-
-  Released 2018-11-12
-
-** Enhance API of eventflag
-New function eventflag_set_mask is added, so that we can only handle
-specified events.  See Gnuk 1.2.12 for an example (while USB Tx is
-busy, the USB thread only accepts EV_TX_FINISHED event, leaving
-other events).
-
-** Acknowledge button support for FST-01 and FST-01G
-While FST-01 and FST-01G don't have any button in the original design,
-it may be PA2 when user put a hall sensor or a switch.
-
-
-* Major changes in Chopstx 1.11
-
-  Released 2018-10-02
-
-** Support calling chopstx_poll with intr->ready==1
-In version <= 1.10, it assumed that all events should be handled after
-chopstx_poll, before calling chopstx_poll again.  With having
-chopstx_intr_done, it's OK now that chopstx_poll can be called again
-not examining/handling all poll descriptors, but only parts of them.
-
-** Acknowledge button change
-In 1.10, the action was able to be "memorized" by the edge detector.
-Now, the edge detector is disabled by ackbtn_disable, and it is
-enabled by ackbtn_enable.  So, the status is cleared correctly.
-
-** New board support: FST-01SZ
-It's still under development.  Programming-wise, it will be kept same.
-
-
-* Major changes in Chopstx 1.10
-
-  Released 2018-09-29
-
-** Function chopstx_intr_wait is not deprecated, now
-Once, it was said that it's deprecated, but it's active again
-to match the new function of chopstx_intr_done.
-
-** API change: chopstx_poll, chopstx_intr_wait, chopstx_intr_done
-To avoid spurious interrupt, we introduce new function
-chopstx_intr_done, which should be called after interrupt handling.
-
-** New driver: Acknowledge button for FST-01SZ
-The use case is waiting user's acknowledge.  We use EXTI interrupt
-feature of STM32.
-
-
-* Major changes in Chopstx 1.9
-
-  Released 2018-05-09
-
-** GD32F103 support
-GD32F103 is an alternative implementation of STM32F103 by Giga Device,
-which can run at 96MHz.
-
-** Minor USB driver fix for STM32F103/GD32F103
-BTABLE setting should be done at initialization, not at USB RESET.
-
-** Minor SYS driver fix for GD32F103
-flash_protect should check FLASH_CR_OPTWRE.
-
-** Minor ADC driver change for GD32F103
-ADC on GD32F103 is another implementation and its behavior is somewhat
-different.  It requires waits after enabling.  So, we use continuous
-sampling, instead of start and stop for each sample.  Still, we
-observe enough noise (> 4.7 bit/byte) for each ADC sampling.
-
-
-* Major changes in Chopstx 1.8
-
-  Released 2018-01-19
-
-** Minor driver API fix
-In version 1.6, part of mcu/stm32f103.h was moved into mcu/cortex-m.h
-and mcu/stm32.h.  Now, mcu/stm32f103.h automatically includes
-mcu/cortex-m.h and mcu/stm32.h, so that it doesn't break existing
-applications.
-
-
-* Major changes in Chopstx 1.7
-
-  Released 2017-12-19
-
-** Fix: timer wakeup
-Timer expiration had a bug.  When it is waken up, the wake up doesn't
-handle as a timer expiration when there are multiple threads on same
-timing of expire.  It confuses as if it were forced wakeup.
-
-** New driver: USART for STM32
-USART driver for STM32 is added.
-
-
-* Major changes in Chopstx 1.6
-
-  Released 2017-11-24
-
-** Fix cancellation
-In Chopstx 1.4 and 1.5, cancellation doesn't work for real MCU.  This
-is due to the change of chx_sched interface, introduced for GNU/Linux
-emulation.  This bug is fixed.
-
-** New feature: sleep mode
-New function chopstx_conf_idle is added to support sleep.  Note that
-use of sleep by this feature requires careful preparation.  For
-example, enabling sleep, a board with no RESET pin cannot be debugged
-by JTAG/SWD.  Setting of DBGMCU_CR (0xE0042004) is required beforehand
-(hardware default is zero).
-
-** API change: chopstx_poll
-This is a kind of clarification.  The third argument is now an array
-of constant pointers.  We don't touch the array itself, just use it.
-This allows having the array in read-only memory and can contribute
-less use of RAM.
-
-** USB API changes
-INTR_REQ_USB is now defined by usb_lld.h.  Enumeration type of
-DEVICE_STATE now has USB_DEVICE_STATE_ prefix.
-
-** USB driver change
-USB suspend and wakeup events are supported for STM32F103.
-
-
-* Major changes in Chopstx 1.5
-
-  Released 2017-10-10
-
-** Stack size definition by stack-def.h
-Stack size of each thread was used to be defined in ldscript.
-While emulation on GNU/Linux doesn't use ldscript, it is better
-to put those definitions in independent header file.  Please see
-example-cdc/stack-def.h and example-cdc/sample.ld.
-
-** More support for emulation on GNU/Linux
-We have SYS driver for emulation on GNU/Linux.  It has flash ROM
-emulation.
-
-
 * Major changes in Chopstx 1.4
 
   Released 2017-08-11
@@ -445,11 +287,11 @@ Vectored Interrupt Controller (NVIC), in the ARM v7-M Architecture
 Reference Manual.  The subsection, B3.4.1, Theory of operation,
 explains how it works.
 
+
 ** gpio_init change
 Now, gpi_init support AFIO mapping and another GPIO (GPIO_OTHER)
 settings.
 
-
-# Local Variables:
-# mode: outline
-# End:
+Local Variables:
+mode: outline
+End:
